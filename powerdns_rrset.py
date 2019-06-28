@@ -128,7 +128,7 @@ def run_module():
         (module.params['state'] == 'absent' and rrset_present))
 
     if module.check_mode:
-        return result
+        module.exit_json(**result)
     if module.params['state'] == 'present':
         result['response'] = zone.create_records([rrset])
     else:
