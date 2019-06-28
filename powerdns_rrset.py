@@ -82,6 +82,8 @@ EXAMPLES = '''
 '''
 
 from ansible.module_utils.basic import AnsibleModule
+import datetime
+import re
 try:
     import powerdns
 except ImportError:
@@ -131,15 +133,29 @@ def run_module():
         module.exit_json(**result)
     if module.params['state'] == 'present':
         result['response'] = zone.create_records([rrset])
+        soa_records = filter(lambda record: record['type'] == 'SOA', zone.get_record(module.params['zone']))
+        if (len(soa_records) > 0):
+            soa_content = soa_records[0]['records'][0]['content']
+            new_soa_content = re.sub(r'(\d{8})(\d{2})', get_new_soa_serial, soa_content)
+            soa_rrset = powerdns.RRSet(
+                name = soa_records[0]['name'],
+                rtype = soa_records[0]['type'],
+                records = [new_soa_content],
+                ttl = soa_records[0]['ttl']
+            )
+            zone.create_records([soa_rrset])
     else:
         result['response'] = zone.delete_record([rrset])
 
     module.exit_json(**result)
 
+def get_new_soa_serial(match):
+    today = datetime.date.today().strftime("%Y%m%d")
+    serial = int(match.group(2)) + 1 if match.group(1) == today else 0
+    return today + '{:02d}'.format(serial)
 
 def is_rrset_present(zone, rrset):
     """Checks if a given rrset is present in a zone
-
     :param powerdns.Zone zone Zone to check for
     :param powerdns.RRSet rrset RRSet to check for
     """
@@ -157,3 +173,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
